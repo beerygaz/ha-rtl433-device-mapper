@@ -1,0 +1,109 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "RTL-433 Event Topic",
+        "description": "Configure the MQTT topic where rtl_433 publishes device events. This integration uses HA's built-in MQTT integration for connectivity.",
+        "data": {
+          "rtl_topic": "rtl_433 Event Topic"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This rtl_433 topic is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "RTL-433 Discovery Options",
+        "description": "Choose what to configure.",
+        "data": {
+          "next_step": "What would you like to do?"
+        }
+      },
+      "manage_devices": {
+        "title": "Manage Discovered Devices",
+        "description": "Found {device_count} devices ({approved_count} approved, {ignored_count} ignored). Select devices to approve for Home Assistant or ignore to hide them. Approved devices can be given a friendly alias.",
+        "data": {
+          "approved_devices": "Approved Devices (will create HA entities)",
+          "ignored_devices": "Ignored Devices (hidden, won't reappear)"
+        }
+      },
+      "merge_devices": {
+        "title": "Merge Suggestions",
+        "description": "Found {merge_count} potential device merges. These are new devices that match the model and channel of an existing approved device that has gone stale — likely a rolling ID change after battery replacement. Select merges to accept.",
+        "data": {
+          "accept_merges": "Accept these merges (history preserved)"
+        }
+      },
+      "settings": {
+        "title": "Discovery Settings",
+        "description": "Fine-tune how rtl_433 devices are discovered and published.",
+        "data": {
+          "discovery_prefix": "HA Discovery Topic Prefix",
+          "device_topic_suffix": "rtl_433 Device Topic Suffix",
+          "expire_after": "Expire After (seconds, 0=disabled)",
+          "stale_timeout": "Stale Timeout (seconds, default 3600 = 1 hour)",
+          "force_update": "Force Update (publish even if value unchanged)",
+          "retain": "Retain Discovery Messages"
+        }
+      }
+    },
+    "abort": {
+      "integration_not_loaded": "Integration is not currently loaded.",
+      "no_devices_discovered": "No devices have been discovered yet. Wait for rtl_433 to receive some signals.",
+      "no_merge_suggestions": "No pending merge suggestions."
+    }
+  },
+  "services": {
+    "approve_device": {
+      "name": "Approve Device",
+      "description": "Approve an rtl_433 device for Home Assistant entity creation.",
+      "fields": {
+        "device_id": {
+          "name": "Device ID",
+          "description": "The device identifier (e.g. Acurite-5n1-C-448)"
+        },
+        "alias": {
+          "name": "Alias",
+          "description": "Friendly name for the device (e.g. Weather Station)"
+        }
+      }
+    },
+    "ignore_device": {
+      "name": "Ignore Device",
+      "description": "Ignore an rtl_433 device (blocklist it from appearing).",
+      "fields": {
+        "device_id": {
+          "name": "Device ID",
+          "description": "The device identifier to ignore"
+        }
+      }
+    },
+    "merge_device": {
+      "name": "Merge Device",
+      "description": "Merge a new device into an existing approved device (rolling ID change).",
+      "fields": {
+        "new_device_id": {
+          "name": "New Device ID",
+          "description": "The newly-appeared device identifier"
+        },
+        "old_device_id": {
+          "name": "Old Device ID",
+          "description": "The existing approved device to merge into"
+        }
+      }
+    },
+    "reset_device": {
+      "name": "Reset Device",
+      "description": "Reset a device back to 'discovered' state.",
+      "fields": {
+        "device_id": {
+          "name": "Device ID",
+          "description": "The device identifier to reset"
+        }
+      }
+    }
+  }
+}

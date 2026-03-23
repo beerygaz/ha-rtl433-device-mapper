@@ -1,0 +1,13 @@
+{
+  "domain": "rtl433_device_mapper",
+  "name": "RTL-433 Device Mapper",
+  "version": "0.1.0",
+  "documentation": "https://github.com/beerygaz/ha-rtl433-device-mapper",
+  "issue_tracker": "https://github.com/beerygaz/ha-rtl433-device-mapper/issues",
+  "dependencies": ["mqtt"],
+  "after_dependencies": ["mqtt"],
+  "codeowners": ["@beerygaz"],
+  "config_flow": true,
+  "iot_class": "local_push",
+  "requirements": []
+}

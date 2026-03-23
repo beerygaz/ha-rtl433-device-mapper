@@ -1,0 +1,5 @@
+{
+  "name": "RTL-433 Device Mapper",
+  "render_readme": true,
+  "homeassistant": "2024.1.0"
+}
