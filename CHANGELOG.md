@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.2] — 2026-03-23
+
+### Fixed
+- Added icon.png and logo.png to custom_components directory for HA native brand display
+- Brand assets now available in both `brand/` (HACS) and `custom_components/` (HA 2026.3+)
+
 ## [0.1.1] — 2026-03-23
 
 ### Fixed
