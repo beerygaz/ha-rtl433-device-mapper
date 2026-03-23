@@ -1,5 +1,10 @@
 # RTL-433 Device Mapper for Home Assistant
 
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=beerygaz&repository=ha-rtl433-device-mapper&category=integration)
+[![GitHub Release](https://img.shields.io/github/v/release/beerygaz/ha-rtl433-device-mapper?style=flat-square)](https://github.com/beerygaz/ha-rtl433-device-mapper/releases)
+[![GitHub License](https://img.shields.io/github/license/beerygaz/ha-rtl433-device-mapper?style=flat-square)](LICENSE)
+[![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=flat-square)](https://github.com/hacs/integration)
+
 A Home Assistant custom integration that discovers 433 MHz devices via [rtl_433](https://github.com/merbanan/rtl_433) MQTT output and lets you **choose which devices to add to HA** — keeping transient devices (neighbours' tyre sensors, passing car remotes) out of your dashboard.
 
 ## Why?
