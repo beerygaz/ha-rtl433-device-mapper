@@ -1,0 +1,61 @@
+approve_device:
+  name: Approve device
+  description: Approve a discovered RTL-433 device for Home Assistant entity provisioning.
+  fields:
+    device_id:
+      name: Device ID
+      description: The unique identifier of the discovered device (e.g. "Acurite-Tower_A_12345").
+      required: true
+      example: "Acurite-Tower_A_12345"
+      selector:
+        text:
+    alias:
+      name: Alias
+      description: Optional friendly name for the device.
+      required: false
+      example: "Garden Temperature Sensor"
+      selector:
+        text:
+
+ignore_device:
+  name: Ignore device
+  description: Ignore/blocklist a discovered device so it is not provisioned as a Home Assistant entity.
+  fields:
+    device_id:
+      name: Device ID
+      description: The unique identifier of the device to ignore.
+      required: true
+      example: "Acurite-Tower_A_12345"
+      selector:
+        text:
+
+merge_device:
+  name: Merge device
+  description: Merge a newly discovered device into an existing approved device (e.g. when a sensor changes its rolling ID).
+  fields:
+    new_device_id:
+      name: New Device ID
+      description: The device ID of the newly discovered device.
+      required: true
+      example: "Acurite-Tower_A_67890"
+      selector:
+        text:
+    old_device_id:
+      name: Old Device ID
+      description: The device ID of the existing approved device to merge into.
+      required: true
+      example: "Acurite-Tower_A_12345"
+      selector:
+        text:
+
+reset_device:
+  name: Reset device
+  description: Reset a device back to 'discovered' state, removing its Home Assistant entities.
+  fields:
+    device_id:
+      name: Device ID
+      description: The unique identifier of the device to reset.
+      required: true
+      example: "Acurite-Tower_A_12345"
+      selector:
+        text:
