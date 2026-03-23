@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.3] — 2026-03-23
+
+### Fixed
+- Brand icons now in `custom_components/<domain>/brand/` subdirectory (HA 2026.3+ native brand proxy)
+- Icon displays correctly on integrations page without external brands repo submission
+
 ## [0.1.2] — 2026-03-23
 
 ### Fixed
