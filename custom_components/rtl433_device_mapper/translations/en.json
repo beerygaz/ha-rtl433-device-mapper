@@ -19,7 +19,8 @@
     "abort": {
       "already_configured": "This device is already configured.",
       "already_in_progress": "A setup flow for this device is already in progress."
-    }
+    },
+    "flow_title": "{model} ({device_id})"
   },
   "options": {
     "step": {
@@ -48,7 +49,7 @@
       },
       "merge_devices": {
         "title": "Merge Suggestions",
-        "description": "Found {merge_count} potential device merges. These are new devices that match the model and channel of an existing approved device that has gone stale — likely a rolling ID change after battery replacement. Select merges to accept.",
+        "description": "Found {merge_count} potential device merges. These are new devices that match the model and channel of an existing approved device that has gone stale \u2014 likely a rolling ID change after battery replacement. Select merges to accept.",
         "data": {
           "accept_merges": "Accept these merges (history preserved)"
         }

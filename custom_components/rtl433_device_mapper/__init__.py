@@ -1,21 +1,15 @@
 """RTL-433 MQTT Discovery Bridge for Home Assistant — V2 Provisioning Only.
 
 This integration subscribes to rtl_433 MQTT events, discovers 433 MHz devices,
-and lets you approve which devices get provisioned as HA entities via MQTT
-auto-discovery. It is a **provisioning layer only** — it NEVER republishes
-telemetry data.
+and lets you approve which devices get provisioned as HA entities.
 
 Architecture:
     rtl_433 → MQTT → this integration (subscribes to events) →
-    publishes HA discovery configs with state_topic pointing at
-    raw rtl_433 device topics → HA entities subscribe directly
-    to rtl_433's data topics.
-
-    If this integration goes down, entities keep receiving data.
+    native HA sensor entities that subscribe to raw rtl_433 device topics.
 
 Config Entry Types:
     ENTRY_TYPE_HUB   — one per MQTT topic; handles MQTT subscription + discovery engine
-    ENTRY_TYPE_DEVICE — one per approved device; triggers MQTT auto-discovery publishing
+    ENTRY_TYPE_DEVICE — one per approved device; owns the sensor entities
 """
 
 from __future__ import annotations
@@ -56,7 +50,7 @@ from .const import (
     STORAGE_KEY,
     STORAGE_VERSION,
 )
-from .discovery import DiscoveryPayload, RTL433DiscoveryEngine
+from .discovery import RTL433DiscoveryEngine
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -139,8 +133,8 @@ async def _async_setup_hub_entry(hass: HomeAssistant, entry: ConfigEntry) -> boo
         # Track new discoveries for event firing
         known_before = set(engine.devices.keys())
 
-        # Process through discovery engine
-        payloads = engine.process_event(data, topic_prefix)
+        # Process through discovery engine (returns payloads we now ignore)
+        engine.process_event(data, topic_prefix)
 
         # Fire HA events for new device discoveries
         new_devices = set(engine.devices.keys()) - known_before
@@ -150,7 +144,6 @@ async def _async_setup_hub_entry(hass: HomeAssistant, entry: ConfigEntry) -> boo
             )
 
             # Trigger a discovery config flow for the new device
-            # so it shows up as a "Discovered" card on the Integrations page
             if device_id not in already_reported:
                 already_reported.add(device_id)
                 device = engine.devices[device_id]
@@ -186,10 +179,6 @@ async def _async_setup_hub_entry(hass: HomeAssistant, entry: ConfigEntry) -> boo
                     },
                 )
 
-        # Publish discovery configs for approved devices
-        for payload in payloads:
-            _publish_discovery(hass, payload, retain)
-
     # ── Trigger discovery flows for existing unhandled devices ─────────────
     # Devices in "discovered" state that survived across restarts need discovery cards
     async def _trigger_startup_discoveries() -> None:
@@ -222,9 +211,6 @@ async def _async_setup_hub_entry(hass: HomeAssistant, entry: ConfigEntry) -> boo
         hass, rtl_topic, _handle_mqtt_message, qos=0
     )
 
-    # ── Republish all approved devices on startup ────────────────────────────
-    _republish_all_approved(hass, engine, retain)
-
     # ── Periodic persistence (every 5 minutes) ──────────────────────────────
 
     async def _periodic_save(_now: Any = None) -> None:
@@ -242,7 +228,7 @@ async def _async_setup_hub_entry(hass: HomeAssistant, entry: ConfigEntry) -> boo
     entry.async_on_unload(entry.add_update_listener(async_options_updated))
 
     _LOGGER.info(
-        "RTL-433 Discovery Bridge V2 started (provisioning-only mode, "
+        "RTL-433 Discovery Bridge V2 started (native entity mode, "
         "subscribed to %s)",
         rtl_topic,
     )
@@ -250,7 +236,7 @@ async def _async_setup_hub_entry(hass: HomeAssistant, entry: ConfigEntry) -> boo
 
 
 async def _async_setup_device_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up a device config entry — publishes MQTT auto-discovery for one device.
+    """Set up a device config entry — creates native HA sensor entities.
 
     Device entries are created when the user approves a device through the
     discovery config flow. They store the device_id and alias.
@@ -268,40 +254,26 @@ async def _async_setup_device_entry(hass: HomeAssistant, entry: ConfigEntry) -> 
         entry.title,
     )
 
-    # Find the hub entry and engine
+    # Find the hub entry and engine to update alias if needed
     hub_data = _get_hub_data(hass)
-    if not hub_data:
+    if hub_data:
+        engine = hub_data["engine"]
+        store = hub_data["store"]
+
+        # Update alias in engine if it changed in config entry
+        alias = entry.title
+        if device_id in engine.devices:
+            device = engine.devices[device_id]
+            if device.alias != alias:
+                engine.set_alias(device_id, alias)
+                engine.approve_device(device_id, alias)
+
+        # Persist the updated engine state
+        await store.async_save(engine.save_state())
+    else:
         _LOGGER.warning(
             "No hub entry found when setting up device %s — "
-            "will publish on next hub reload",
-            device_id,
-        )
-        hass.data[DOMAIN][entry.entry_id] = {
-            "entry_type": ENTRY_TYPE_DEVICE,
-            "device_id": device_id,
-        }
-        return True
-
-    engine = hub_data["engine"]
-    retain = hub_data["retain"]
-
-    # Update alias in engine if it changed in config entry
-    alias = entry.title
-    if device_id in engine.devices:
-        device = engine.devices[device_id]
-        if device.alias != alias:
-            engine.set_alias(device_id, alias)
-            engine.approve_device(device_id, alias)
-
-    # Publish MQTT discovery configs
-    if device_id in engine.approved_devices:
-        device = engine.approved_devices[device_id]
-        payloads = engine.build_discovery_payloads(device)
-        for payload in payloads:
-            _publish_discovery(hass, payload, retain)
-        _LOGGER.info(
-            "Published %d discovery configs for device %s",
-            len(payloads),
+            "entities may not have full device info until hub is loaded",
             device_id,
         )
 
@@ -310,9 +282,9 @@ async def _async_setup_device_entry(hass: HomeAssistant, entry: ConfigEntry) -> 
         "device_id": device_id,
     }
 
-    # Persist the updated engine state
-    store = hub_data["store"]
-    await store.async_save(engine.save_state())
+    # Forward to the sensor platform — this creates the actual HA entities
+    await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
+    _LOGGER.info("Forwarded device entry %s to sensor platform", device_id)
 
     return True
 
@@ -322,9 +294,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry_type = entry.data.get("entry_type", ENTRY_TYPE_HUB)
 
     if entry_type == ENTRY_TYPE_DEVICE:
-        hass.data[DOMAIN].pop(entry.entry_id, None)
-        _LOGGER.info("Unloaded device entry: %s", entry.title)
-        return True
+        # Unload sensor platform entities
+        unload_ok = await hass.config_entries.async_unload_platforms(entry, ["sensor"])
+        if unload_ok:
+            hass.data[DOMAIN].pop(entry.entry_id, None)
+            _LOGGER.info("Unloaded device entry: %s", entry.title)
+        return unload_ok
 
     # Hub unload
     data = hass.data[DOMAIN].pop(entry.entry_id, None)
@@ -361,22 +336,13 @@ def _get_hub_data(hass: HomeAssistant) -> dict | None:
     return None
 
 
-# ─── MQTT Publishing ─────────────────────────────────────────────────────────
+# ─── Stubs kept for config_flow.py import compatibility ──────────────────────
+# config_flow.py imports these; they're no-ops now that we use native entities.
 
 
-def _publish_discovery(
-    hass: HomeAssistant, payload: DiscoveryPayload, retain: bool
-) -> None:
-    """Publish a single HA discovery config topic via HA's MQTT integration."""
-    json_payload = payload.to_json() if payload.payload else ""
-    mqtt.async_publish(
-        hass,
-        payload.config_topic,
-        json_payload,
-        qos=0,
-        retain=retain,
-    )
-    _LOGGER.debug("Published discovery: %s", payload.config_topic)
+def _publish_discovery(hass: HomeAssistant, payload: Any, retain: bool) -> None:
+    """No-op stub — MQTT discovery replaced by native HA entities."""
+    pass
 
 
 def _republish_all_approved(
@@ -384,19 +350,8 @@ def _republish_all_approved(
     engine: RTL433DiscoveryEngine,
     retain: bool,
 ) -> int:
-    """Republish discovery configs for all approved devices.
-
-    Called on startup and after merges to ensure HA entities are up-to-date.
-    """
-    count = 0
-    for device in engine.approved_devices.values():
-        payloads = engine.build_discovery_payloads(device)
-        for payload in payloads:
-            _publish_discovery(hass, payload, retain)
-            count += 1
-    if count:
-        _LOGGER.info("Republished %d discovery configs for approved devices", count)
-    return count
+    """No-op stub — MQTT discovery replaced by native HA entities."""
+    return 0
 
 
 def _remove_device_from_ha(
@@ -405,17 +360,8 @@ def _remove_device_from_ha(
     device_id: str,
     retain: bool,
 ) -> int:
-    """Publish empty configs to remove a device's entities from HA."""
-    device = engine.devices.get(device_id)
-    if not device:
-        return 0
-    payloads = engine.build_removal_payloads(device)
-    for payload in payloads:
-        mqtt.async_publish(hass, payload.config_topic, "", qos=0, retain=retain)
-    _LOGGER.info(
-        "Published %d removal configs for device %s", len(payloads), device_id
-    )
-    return len(payloads)
+    """No-op stub — entity removal handled by unloading the config entry."""
+    return 0
 
 
 # ─── Service Registration ────────────────────────────────────────────────────
@@ -428,16 +374,14 @@ def _register_services(hass: HomeAssistant) -> None:
         return  # Already registered
 
     async def handle_approve_device(call: ServiceCall) -> None:
-        """Approve a device for HA discovery, optionally setting an alias."""
+        """Approve a device for HA entity creation, optionally setting an alias."""
         device_id = call.data["device_id"]
         alias = call.data.get("alias")
         hub_data = _get_hub_data(hass)
         if hub_data:
             engine: RTL433DiscoveryEngine = hub_data["engine"]
-            retain: bool = hub_data["retain"]
+            store: Store = hub_data["store"]
             if engine.approve_device(device_id, alias):
-                _republish_all_approved(hass, engine, retain)
-                store: Store = hub_data["store"]
                 await store.async_save(engine.save_state())
                 _LOGGER.info("Service: approved device %s (alias=%s)", device_id, alias)
                 return
@@ -449,10 +393,8 @@ def _register_services(hass: HomeAssistant) -> None:
         hub_data = _get_hub_data(hass)
         if hub_data:
             engine: RTL433DiscoveryEngine = hub_data["engine"]
-            retain: bool = hub_data["retain"]
+            store: Store = hub_data["store"]
             if engine.ignore_device(device_id):
-                _remove_device_from_ha(hass, engine, device_id, retain)
-                store: Store = hub_data["store"]
                 await store.async_save(engine.save_state())
                 _LOGGER.info("Service: ignored device %s", device_id)
                 return
@@ -465,15 +407,9 @@ def _register_services(hass: HomeAssistant) -> None:
         hub_data = _get_hub_data(hass)
         if hub_data:
             engine: RTL433DiscoveryEngine = hub_data["engine"]
-            retain: bool = hub_data["retain"]
-
-            # Remove old device's HA entities first
-            _remove_device_from_ha(hass, engine, old_device_id, retain)
+            store: Store = hub_data["store"]
 
             if engine.merge_device(new_device_id, old_device_id):
-                # Republish with new state_topic pointing at new device
-                _republish_all_approved(hass, engine, retain)
-                store: Store = hub_data["store"]
                 await store.async_save(engine.save_state())
                 _LOGGER.info(
                     "Service: merged %s → %s", old_device_id, new_device_id
@@ -489,10 +425,8 @@ def _register_services(hass: HomeAssistant) -> None:
         hub_data = _get_hub_data(hass)
         if hub_data:
             engine: RTL433DiscoveryEngine = hub_data["engine"]
-            retain: bool = hub_data["retain"]
+            store: Store = hub_data["store"]
             if engine.reset_device(device_id):
-                _remove_device_from_ha(hass, engine, device_id, retain)
-                store: Store = hub_data["store"]
                 await store.async_save(engine.save_state())
                 _LOGGER.info("Service: reset device %s", device_id)
                 return
