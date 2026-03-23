@@ -4,30 +4,36 @@
       <stop offset="0%" stop-color="#1E88E5"/>
       <stop offset="100%" stop-color="#1565C0"/>
     </linearGradient>
+    <clipPath id="circle-clip">
+      <circle cx="64" cy="64" r="62"/>
+    </clipPath>
   </defs>
   
-  <!-- Background circle -->
-  <circle cx="64" cy="64" r="58" fill="url(#bg)"/>
+  <!-- Background circle (larger) -->
+  <circle cx="64" cy="64" r="62" fill="url(#bg)"/>
   
-  <!-- Radio waves (3 arcs emanating from antenna tip) -->
-  <path d="M 44 38 A 24 24 0 0 1 84 38" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
-  <path d="M 36 30 A 34 34 0 0 1 92 30" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.35"/>
-  <path d="M 28 22 A 44 44 0 0 1 100 22" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.2"/>
-  
-  <!-- Antenna mast -->
-  <rect x="61" y="38" width="6" height="38" rx="3" fill="white"/>
-  
-  <!-- Antenna tip (circle) -->
-  <circle cx="64" cy="36" r="5" fill="white"/>
-  
-  <!-- Base / ground plane -->
-  <path d="M 42 82 L 64 76 L 86 82" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  
-  <!-- Arrow / mapper symbol (pointing right, suggesting mapping/routing) -->
-  <path d="M 48 96 L 80 96" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
-  <path d="M 74 90 L 80 96 L 74 102" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.7"/>
-  
-  <!-- Small dots representing discovered devices -->
-  <circle cx="44" cy="96" r="3" fill="white" opacity="0.7"/>
-  <circle cx="86" cy="96" r="3" fill="#4CAF50"/>
+  <!-- Everything clipped inside the circle -->
+  <g clip-path="url(#circle-clip)">
+    <!-- Radio waves (3 arcs emanating from antenna tip) -->
+    <path d="M 44 42 A 24 24 0 0 1 84 42" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
+    <path d="M 34 32 A 36 36 0 0 1 94 32" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.35"/>
+    <path d="M 24 22 A 48 48 0 0 1 104 22" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.2"/>
+    
+    <!-- Antenna mast -->
+    <rect x="61" y="42" width="6" height="34" rx="3" fill="white"/>
+    
+    <!-- Antenna tip (circle) -->
+    <circle cx="64" cy="40" r="5" fill="white"/>
+    
+    <!-- Base / ground plane -->
+    <path d="M 42 82 L 64 76 L 86 82" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <!-- Arrow / mapper symbol -->
+    <path d="M 48 96 L 80 96" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
+    <path d="M 74 90 L 80 96 L 74 102" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.7"/>
+    
+    <!-- Small dots representing discovered → approved -->
+    <circle cx="44" cy="96" r="3" fill="white" opacity="0.7"/>
+    <circle cx="86" cy="96" r="3" fill="#4CAF50"/>
+  </g>
 </svg>
