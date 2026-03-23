@@ -7,10 +7,18 @@
         "data": {
           "rtl_topic": "rtl_433 Event Topic"
         }
+      },
+      "confirm_device": {
+        "title": "Add RTL-433 Device: {model}",
+        "description": "A new 433 MHz device has been detected.\n\n**Device:** {device_id}\n**Model:** {model}\n**Channel:** {channel}\n**ID:** {raw_id}\n**Sensors:** {fields}\n\nSet a friendly name for this device, then click Submit to add it to Home Assistant.",
+        "data": {
+          "alias": "Friendly Name"
+        }
       }
     },
     "abort": {
-      "already_configured": "This rtl_433 topic is already configured."
+      "already_configured": "This device is already configured.",
+      "already_in_progress": "A setup flow for this device is already in progress."
     }
   },
   "options": {
@@ -20,6 +28,14 @@
         "description": "Choose what to configure.",
         "data": {
           "next_step": "What would you like to do?"
+        }
+      },
+      "init_device": {
+        "title": "Device Options: {current_name}",
+        "description": "Manage device **{device_id}**.\n\nRename the device or reset it back to discovered state (this removes its entities from HA).",
+        "data": {
+          "alias": "Friendly Name",
+          "action": "Action"
         }
       },
       "manage_devices": {
@@ -54,6 +70,56 @@
       "integration_not_loaded": "Integration is not currently loaded.",
       "no_devices_discovered": "No devices have been discovered yet. Wait for rtl_433 to receive some signals.",
       "no_merge_suggestions": "No pending merge suggestions."
+    }
+  },
+  "services": {
+    "approve_device": {
+      "name": "Approve Device",
+      "description": "Approve an rtl_433 device for Home Assistant entity creation.",
+      "fields": {
+        "device_id": {
+          "name": "Device ID",
+          "description": "The device identifier (e.g. Acurite-5n1-C-448)"
+        },
+        "alias": {
+          "name": "Alias",
+          "description": "Friendly name for the device (e.g. Weather Station)"
+        }
+      }
+    },
+    "ignore_device": {
+      "name": "Ignore Device",
+      "description": "Ignore an rtl_433 device (blocklist it from appearing).",
+      "fields": {
+        "device_id": {
+          "name": "Device ID",
+          "description": "The device identifier to ignore"
+        }
+      }
+    },
+    "merge_device": {
+      "name": "Merge Device",
+      "description": "Merge a new device into an existing approved device (rolling ID change).",
+      "fields": {
+        "new_device_id": {
+          "name": "New Device ID",
+          "description": "The newly-appeared device identifier"
+        },
+        "old_device_id": {
+          "name": "Old Device ID",
+          "description": "The existing approved device to merge into"
+        }
+      }
+    },
+    "reset_device": {
+      "name": "Reset Device",
+      "description": "Reset a device back to 'discovered' state.",
+      "fields": {
+        "device_id": {
+          "name": "Device ID",
+          "description": "The device identifier to reset"
+        }
+      }
     }
   }
 }

@@ -17,6 +17,12 @@ CONF_FORCE_UPDATE = "force_update"
 CONF_RETAIN = "retain"
 CONF_STALE_TIMEOUT = "stale_timeout"
 CONF_UNIT_SYSTEM = "unit_system"
+CONF_DEVICE_ID = "device_id"
+
+# ── Entry Types ───────────────────────────────────────────────────────────────
+
+ENTRY_TYPE_HUB = "hub"      # Main config entry: MQTT subscription + discovery engine
+ENTRY_TYPE_DEVICE = "device"  # Per-device entry: approved 433 MHz device
 
 # ── Defaults ─────────────────────────────────────────────────────────────────
 
