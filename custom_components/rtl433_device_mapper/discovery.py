@@ -21,6 +21,7 @@ Ported from rtl_433_mqtt_hass.py with the following V2 improvements:
 
 from __future__ import annotations
 
+import fnmatch
 import json
 import logging
 import re
@@ -76,6 +77,30 @@ def slugify(text: str) -> str:
         .replace("(", "")
         .replace(")", "")
     )
+
+
+def normalize_blocklist_pattern(pattern: str) -> str:
+    """Normalize a user-provided model blocklist pattern for matching.
+
+    Matching is case-insensitive. Bare prefixes get an implicit trailing `*`
+    so `Digitech` matches `Digitech-XC0346`.
+    """
+    normalized = pattern.strip().lower()
+    if not normalized:
+        return ""
+    if not any(char in normalized for char in "*?[]"):
+        normalized = f"{normalized}*"
+    return normalized
+
+
+def match_blocked_model(model: str, patterns: list[str]) -> str | None:
+    """Return the matching pattern if the model is blocked, else None."""
+    normalized_model = model.strip().lower()
+    for pattern in patterns:
+        normalized_pattern = normalize_blocklist_pattern(pattern)
+        if normalized_pattern and fnmatch.fnmatch(normalized_model, normalized_pattern):
+            return pattern
+    return None
 
 
 # ─── Data Classes ────────────────────────────────────────────────────────────
@@ -248,6 +273,7 @@ class RTL433DiscoveryEngine:
         force_update: bool = False,
         stale_timeout: int = DEFAULT_STALE_TIMEOUT,
         unit_system: str = DEFAULT_UNIT_SYSTEM,
+        model_blocklist: list[str] | None = None,
     ) -> None:
         self.discovery_prefix = discovery_prefix
         self.device_topic_suffix = device_topic_suffix
@@ -255,6 +281,9 @@ class RTL433DiscoveryEngine:
         self.force_update = force_update
         self.stale_timeout = stale_timeout
         self.unit_system = unit_system
+        self.model_blocklist = [
+            pattern.strip() for pattern in (model_blocklist or []) if pattern.strip()
+        ]
 
         # Device registry: device_id → DiscoveredDevice
         self._devices: dict[str, DiscoveredDevice] = {}
@@ -439,10 +468,15 @@ class RTL433DiscoveryEngine:
         self._merge_suggestions = {}
 
         devices_data = data.get("devices", data)  # Backwards compat with v1
+        loaded_devices = 0
+        device_errors = 0
+
         for key, device_data in devices_data.items():
             try:
                 self._devices[key] = DiscoveredDevice.from_dict(device_data)
+                loaded_devices += 1
             except (KeyError, TypeError) as err:
+                device_errors += 1
                 _LOGGER.warning("Failed to load device %s: %s", key, err)
 
         for key, merge_data in data.get("merge_suggestions", {}).items():
@@ -450,6 +484,13 @@ class RTL433DiscoveryEngine:
                 self._merge_suggestions[key] = MergeSuggestion.from_dict(merge_data)
             except (KeyError, TypeError) as err:
                 _LOGGER.warning("Failed to load merge suggestion %s: %s", key, err)
+
+        _LOGGER.info(
+            "Loaded %d/%d devices (%d errors)",
+            loaded_devices,
+            len(devices_data),
+            device_errors,
+        )
 
     def save_state(self) -> dict:
         """Export full engine state as a dict suitable for JSON serialization."""
@@ -571,31 +612,54 @@ class RTL433DiscoveryEngine:
         payloads: list[DiscoveryPayload] = []
 
         for field_key in device.fields_seen:
-            if field_key in FIELD_MAPPINGS:
-                mapping = FIELD_MAPPINGS[field_key]
-                payload = self._build_single_config(
-                    device, alias_slug, mapping, field_key
-                )
-                if payload:
-                    payloads.append(payload)
-
-            # Handle secret_knock multi-mapping
-            if field_key == "secret_knock":
-                for mapping in SECRET_KNOCK_MAPPINGS:
-                    payload = self._build_single_config(
-                        device, alias_slug, mapping, "secret_knock"
-                    )
-                    if payload:
-                        payloads.append(payload)
-
-            # Handle synthetic (computed) mappings — extra entities derived from a source field
-            if field_key in SYNTHETIC_MAPPINGS:
-                for mapping in SYNTHETIC_MAPPINGS[field_key]:
+            try:
+                if field_key in FIELD_MAPPINGS:
+                    mapping = FIELD_MAPPINGS[field_key]
                     payload = self._build_single_config(
                         device, alias_slug, mapping, field_key
                     )
                     if payload:
                         payloads.append(payload)
+
+                # Handle secret_knock multi-mapping
+                if field_key == "secret_knock":
+                    for mapping in SECRET_KNOCK_MAPPINGS:
+                        try:
+                            payload = self._build_single_config(
+                                device, alias_slug, mapping, "secret_knock"
+                            )
+                            if payload:
+                                payloads.append(payload)
+                        except (KeyError, TypeError, ValueError) as err:
+                            _LOGGER.warning(
+                                "Failed to build secret_knock config for device=%s: %s",
+                                device.device_id,
+                                err,
+                            )
+
+                # Handle synthetic (computed) mappings
+                if field_key in SYNTHETIC_MAPPINGS:
+                    for mapping in SYNTHETIC_MAPPINGS[field_key]:
+                        try:
+                            payload = self._build_single_config(
+                                device, alias_slug, mapping, field_key
+                            )
+                            if payload:
+                                payloads.append(payload)
+                        except (KeyError, TypeError, ValueError) as err:
+                            _LOGGER.warning(
+                                "Failed to build synthetic config for device=%s field=%s: %s",
+                                device.device_id,
+                                field_key,
+                                err,
+                            )
+            except (KeyError, TypeError, ValueError) as err:
+                _LOGGER.warning(
+                    "Failed to build discovery config for device=%s field=%s: %s",
+                    device.device_id,
+                    field_key,
+                    err,
+                )
 
         return payloads
 
@@ -698,10 +762,11 @@ class RTL433DiscoveryEngine:
     ) -> list[DiscoveryPayload]:
         """Process a single rtl_433 event message.
 
-        1. Extracts device identity
-        2. Updates the device registry (fields, last_seen, etc.)
-        3. Checks for merge candidates (rolling-ID detection)
-        4. Returns discovery payloads ONLY for approved devices
+        1. Checks model against blocklist
+        2. Extracts device identity
+        3. Updates the device registry (fields, last_seen, etc.)
+        4. Checks for merge candidates (rolling-ID detection)
+        5. Returns discovery payloads ONLY for approved devices
 
         The caller decides whether to actually publish.
 
@@ -712,8 +777,29 @@ class RTL433DiscoveryEngine:
             _LOGGER.debug("Event has no 'model' field, skipping")
             return []
 
-        model = sanitize(data["model"])
-        base_topic, device_id = self._resolve_device_topic(data, topic_prefix)
+        raw_model = str(data["model"])
+
+        # ── Check model blocklist before any processing ──────────────────────
+        matched_pattern = match_blocked_model(raw_model, self.model_blocklist)
+        if matched_pattern:
+            _LOGGER.debug(
+                "Blocked device model=%s (matched pattern=%s)",
+                raw_model,
+                matched_pattern,
+            )
+            return []
+
+        model = sanitize(raw_model)
+
+        try:
+            base_topic, device_id = self._resolve_device_topic(data, topic_prefix)
+        except (KeyError, TypeError, ValueError) as err:
+            _LOGGER.warning(
+                "Failed to resolve device topic for model=%s: %s",
+                raw_model,
+                err,
+            )
+            return []
 
         if not device_id:
             _LOGGER.warning("No suitable identifier for model=%s", model)
