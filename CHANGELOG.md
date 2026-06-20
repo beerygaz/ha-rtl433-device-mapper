@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/beerygaz/ha-rtl433-device-mapper/compare/rtl433-device-mapper-v0.2.0...rtl433-device-mapper-v0.3.0) (2026-06-20)
+
+
+### Features
+
+* add model blocklist to filter unwanted devices ([#3](https://github.com/beerygaz/ha-rtl433-device-mapper/issues/3)) ([8093e27](https://github.com/beerygaz/ha-rtl433-device-mapper/commit/8093e27c809a4d6ac4829db1314be086b4c087df))
+
+
+### Bug Fixes
+
+* resolve voluptuous schema serialization error in options flow ([#6](https://github.com/beerygaz/ha-rtl433-device-mapper/issues/6)) ([e796541](https://github.com/beerygaz/ha-rtl433-device-mapper/commit/e796541f6b3f20025e4a51d53a874113f52f7293)), closes [#4](https://github.com/beerygaz/ha-rtl433-device-mapper/issues/4)
+
 ## [0.2.1] — 2026-06-20
 
 ### Bug Fixes
