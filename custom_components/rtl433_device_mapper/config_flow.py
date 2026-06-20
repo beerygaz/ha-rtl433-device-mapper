@@ -498,16 +498,26 @@ class RTL433DiscoveryOptionsFlow(config_entries.OptionsFlow):
                     vol.Optional(
                         "approved_devices",
                         default=current_approved,
-                    ): vol.All(
-                        vol.Coerce(list),
-                        [vol.In(device_options)],
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                {"value": k, "label": v}
+                                for k, v in device_options.items()
+                            ],
+                            multiple=True,
+                        )
                     ),
                     vol.Optional(
                         "ignored_devices",
                         default=current_ignored,
-                    ): vol.All(
-                        vol.Coerce(list),
-                        [vol.In(device_options)],
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                {"value": k, "label": v}
+                                for k, v in device_options.items()
+                            ],
+                            multiple=True,
+                        )
                     ),
                 }
             ),
@@ -568,9 +578,14 @@ class RTL433DiscoveryOptionsFlow(config_entries.OptionsFlow):
                     vol.Optional(
                         "accept_merges",
                         default=[],
-                    ): vol.All(
-                        vol.Coerce(list),
-                        [vol.In(merge_options)],
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                {"value": k, "label": v}
+                                for k, v in merge_options.items()
+                            ],
+                            multiple=True,
+                        )
                     ),
                 }
             ),
