@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1] — 2026-06-20
+
+### Bug Fixes
+
+- Fix `ValueError: Unable to convert schema: <class 'list'>` crash in the options flow ([#4](https://github.com/beerygaz/ha-rtl433-device-mapper/issues/4))
+  - Replace bare `vol.All(vol.Coerce(list), [vol.In(...)])` with `selector.SelectSelector` (multi-select) for `approved_devices`, `ignored_devices`, and `accept_merges` fields
+  - `voluptuous_serialize` cannot serialise a bare Python `list` type; HA `selector.SelectSelector` is the correct UI-aware replacement and is already natively serialisable
+
 ## [0.2.0](https://github.com/beerygaz/ha-rtl433-device-mapper/compare/rtl433-device-mapper-v0.1.3...rtl433-device-mapper-v0.2.0) (2026-04-02)
 
 
