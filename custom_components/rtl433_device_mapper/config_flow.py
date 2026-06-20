@@ -18,6 +18,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers import selector
 
 from .const import (
     CONF_DEVICE_ID,
@@ -25,6 +26,7 @@ from .const import (
     CONF_DISCOVERY_PREFIX,
     CONF_EXPIRE_AFTER,
     CONF_FORCE_UPDATE,
+    CONF_MODEL_BLOCKLIST,
     CONF_RETAIN,
     CONF_RTL_TOPIC,
     CONF_STALE_TIMEOUT,
@@ -32,6 +34,7 @@ from .const import (
     DEFAULT_DISCOVERY_PREFIX,
     DEFAULT_EXPIRE_AFTER,
     DEFAULT_FORCE_UPDATE,
+    DEFAULT_MODEL_BLOCKLIST,
     DEFAULT_RETAIN,
     DEFAULT_RTL_TOPIC,
     DEFAULT_STALE_TIMEOUT,
@@ -73,6 +76,16 @@ _FIELD_LABELS = {
     "light_lux": "Light",
     "uv": "UV Index",
 }
+
+
+def _serialize_model_blocklist(patterns: list[str]) -> str:
+    """Convert stored blocklist patterns into textarea content."""
+    return "\n".join(pattern for pattern in patterns if pattern.strip())
+
+
+def _parse_model_blocklist(value: str) -> list[str]:
+    """Parse textarea content into stored blocklist patterns."""
+    return [line.strip() for line in value.splitlines() if line.strip()]
 
 
 class RTL433DiscoveryConfigFlow(
@@ -571,6 +584,10 @@ class RTL433DiscoveryOptionsFlow(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Discovery tuning parameters."""
         if user_input is not None:
+            user_input = dict(user_input)
+            user_input[CONF_MODEL_BLOCKLIST] = _parse_model_blocklist(
+                user_input.get(CONF_MODEL_BLOCKLIST, "")
+            )
             return self.async_create_entry(title="", data=user_input)
 
         current = self._config_entry.options
@@ -613,6 +630,17 @@ class RTL433DiscoveryOptionsFlow(config_entries.OptionsFlow):
                         CONF_RETAIN,
                         default=current.get(CONF_RETAIN, DEFAULT_RETAIN),
                     ): bool,
+                    vol.Optional(
+                        CONF_MODEL_BLOCKLIST,
+                        default=_serialize_model_blocklist(
+                            current.get(CONF_MODEL_BLOCKLIST, DEFAULT_MODEL_BLOCKLIST)
+                        ),
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(
+                            multiline=True,
+                            type=selector.TextSelectorType.TEXT,
+                        )
+                    ),
                 }
             ),
         )

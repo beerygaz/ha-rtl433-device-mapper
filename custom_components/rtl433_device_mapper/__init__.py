@@ -43,6 +43,7 @@ from .const import (
     CONF_DISCOVERY_PREFIX,
     CONF_EXPIRE_AFTER,
     CONF_FORCE_UPDATE,
+    CONF_MODEL_BLOCKLIST,
     CONF_RETAIN,
     CONF_RTL_TOPIC,
     CONF_STALE_TIMEOUT,
@@ -50,6 +51,7 @@ from .const import (
     DEFAULT_DISCOVERY_PREFIX,
     DEFAULT_EXPIRE_AFTER,
     DEFAULT_FORCE_UPDATE,
+    DEFAULT_MODEL_BLOCKLIST,
     DEFAULT_RETAIN,
     DEFAULT_STALE_TIMEOUT,
     DEVICE_STATE_APPROVED,
@@ -105,26 +107,26 @@ def _publish_payloads_direct(
     if not payloads:
         return 0
 
-    import time
     import threading
+    import time
+    import uuid
 
     broker = broker_config.get("broker", "localhost")
-    port = broker_config.get("port", 1883)
+    port = int(broker_config.get("port", 1883))
     username = broker_config.get("username")
     password = broker_config.get("password")
 
-    # Use a unique client_id suffix to avoid conflicts with concurrent calls
-    import uuid
     client_id = f"rtl433_mapper_pub_{uuid.uuid4().hex[:8]}"
 
     published_count = 0
     connected_event = threading.Event()
+    connect_result: dict[str, Any] = {"reason_code": None}
 
     def _on_connect(client, userdata, flags, reason_code, properties):
-        if reason_code == 0:
-            connected_event.set()
-        else:
-            _LOGGER.warning("Direct MQTT connect failed: rc=%s", reason_code)
+        connect_result["reason_code"] = int(reason_code)
+        connected_event.set()
+
+    client: paho_mqtt.Client | None = None
 
     try:
         client = paho_mqtt.Client(
@@ -143,9 +145,31 @@ def _publish_payloads_direct(
         # Wait up to 5 seconds for the connection to be established
         if not connected_event.wait(timeout=5.0):
             _LOGGER.error(
-                "Direct MQTT connect timed out after 5s (broker=%s:%d)", broker, port
+                "Could not connect to MQTT broker at %s:%d — "
+                "is the broker running?",
+                broker,
+                port,
             )
-            client.loop_stop()
+            return 0
+
+        reason_code = connect_result["reason_code"]
+        if reason_code != 0:
+            if reason_code in (4, 5):
+                _LOGGER.error(
+                    "MQTT authentication failed — check broker credentials "
+                    "(%s:%d, CONNACK rc=%s)",
+                    broker,
+                    port,
+                    reason_code,
+                )
+            else:
+                _LOGGER.error(
+                    "Could not connect to MQTT broker at %s:%d — "
+                    "CONNACK rc=%s",
+                    broker,
+                    port,
+                    reason_code,
+                )
             return 0
 
         for dp in payloads:
@@ -165,16 +189,60 @@ def _publish_payloads_direct(
                 )
             else:
                 _LOGGER.warning(
-                    "Failed to publish to %s — rc=%d", dp.config_topic, result.rc
+                    "Failed to publish to %s via MQTT broker %s:%d — rc=%d",
+                    dp.config_topic,
+                    broker,
+                    port,
+                    result.rc,
                 )
 
         # Brief wait to let the outbound queue flush before disconnecting
         time.sleep(0.3)
-        client.loop_stop()
-        client.disconnect()
 
+    except ConnectionRefusedError:
+        _LOGGER.error(
+            "MQTT broker at %s:%d refused connection — "
+            "is the broker running and accepting connections?",
+            broker,
+            port,
+        )
+    except TimeoutError:
+        _LOGGER.error(
+            "Connection to MQTT broker at %s:%d timed out — "
+            "check network connectivity and broker status",
+            broker,
+            port,
+        )
+    except OSError as err:
+        _LOGGER.error(
+            "MQTT network error while publishing via %s:%d: %s",
+            broker,
+            port,
+            err,
+        )
+    except paho_mqtt.MQTTException as err:
+        _LOGGER.error(
+            "MQTT client error while publishing via %s:%d: %s",
+            broker,
+            port,
+            err,
+        )
     except Exception as err:  # noqa: BLE001
-        _LOGGER.error("Direct MQTT publish error: %s", err)
+        _LOGGER.exception(
+            "Unexpected error publishing discovery payloads via broker %s:%d",
+            broker,
+            port,
+        )
+    finally:
+        if client is not None:
+            try:
+                client.loop_stop()
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                client.disconnect()
+            except Exception:  # noqa: BLE001
+                pass
 
     return published_count
 
@@ -196,9 +264,27 @@ async def _async_setup_hub_entry(hass: HomeAssistant, entry: ConfigEntry) -> boo
     """Set up the hub config entry — MQTT subscription + discovery engine."""
     hass.data.setdefault(DOMAIN, {})
 
+    # ── Verify MQTT integration is available ─────────────────────────────────
+    mqtt_entries = hass.config_entries.async_entries(MQTT_DOMAIN)
+    if not mqtt_entries:
+        _LOGGER.error(
+            "MQTT integration not configured — "
+            "RTL-433 Device Mapper requires MQTT. "
+            "Please set up the MQTT integration first."
+        )
+        return False
+
     # ── Load persistent state ────────────────────────────────────────────────
     store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
-    stored_data = await store.async_load() or {}
+    try:
+        stored_data = await store.async_load() or {}
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.warning(
+            "Failed to load persistent RTL-433 state, "
+            "continuing with empty state: %s",
+            err,
+        )
+        stored_data = {}
 
     # ── Create discovery engine ──────────────────────────────────────────────
     engine = RTL433DiscoveryEngine(
@@ -211,15 +297,21 @@ async def _async_setup_hub_entry(hass: HomeAssistant, entry: ConfigEntry) -> boo
         expire_after=entry.options.get(CONF_EXPIRE_AFTER, DEFAULT_EXPIRE_AFTER),
         force_update=entry.options.get(CONF_FORCE_UPDATE, DEFAULT_FORCE_UPDATE),
         stale_timeout=entry.options.get(CONF_STALE_TIMEOUT, DEFAULT_STALE_TIMEOUT),
+        model_blocklist=entry.options.get(
+            CONF_MODEL_BLOCKLIST, DEFAULT_MODEL_BLOCKLIST
+        ),
     )
 
     # Restore persisted device states
     if stored_data:
-        engine.load_state(stored_data)
-        _LOGGER.info(
-            "Restored %d devices from persistent storage",
-            len(engine.devices),
-        )
+        try:
+            engine.load_state(stored_data)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning(
+                "Failed to restore persistent RTL-433 state, "
+                "continuing with empty state: %s",
+                err,
+            )
 
     retain = entry.options.get(CONF_RETAIN, DEFAULT_RETAIN)
     rtl_topic = entry.data.get(CONF_RTL_TOPIC, "rtl_433/+/events")
@@ -365,9 +457,18 @@ async def _async_setup_hub_entry(hass: HomeAssistant, entry: ConfigEntry) -> boo
     hass.async_create_task(_startup_republish())
 
     # ── Subscribe to rtl_433 events ──────────────────────────────────────────
-    entry_data["unsub_mqtt"] = await mqtt.async_subscribe(
-        hass, rtl_topic, _handle_mqtt_message, qos=0
-    )
+    try:
+        entry_data["unsub_mqtt"] = await mqtt.async_subscribe(
+            hass, rtl_topic, _handle_mqtt_message, qos=0
+        )
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.error(
+            "Failed to subscribe to %s — check MQTT connection: %s",
+            rtl_topic,
+            err,
+        )
+        hass.data[DOMAIN].pop(entry.entry_id, None)
+        return False
 
     # ── Periodic persistence (every 5 minutes) ──────────────────────────────
 

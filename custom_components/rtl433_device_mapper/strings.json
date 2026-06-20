@@ -56,14 +56,15 @@
       },
       "settings": {
         "title": "Discovery Settings",
-        "description": "Fine-tune how rtl_433 devices are discovered and published.",
+        "description": "Fine-tune how rtl_433 devices are discovered and published. Use blocked model patterns to silently drop noisy neighbour devices before they enter discovery.",
         "data": {
           "discovery_prefix": "HA Discovery Topic Prefix",
           "device_topic_suffix": "rtl_433 Device Topic Suffix",
           "expire_after": "Expire After (seconds, 0=disabled)",
           "stale_timeout": "Stale Timeout (seconds, default 3600 = 1 hour)",
           "force_update": "Force Update (publish even if value unchanged)",
-          "retain": "Retain Discovery Messages"
+          "retain": "Retain Discovery Messages",
+          "model_blocklist": "Blocked Model Patterns (one per line, e.g. Digitech, Markisol, HT680-Remote)"
         }
       }
     },

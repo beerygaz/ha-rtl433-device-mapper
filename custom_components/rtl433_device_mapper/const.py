@@ -18,6 +18,7 @@ CONF_RETAIN = "retain"
 CONF_STALE_TIMEOUT = "stale_timeout"
 CONF_UNIT_SYSTEM = "unit_system"
 CONF_DEVICE_ID = "device_id"
+CONF_MODEL_BLOCKLIST = "model_blocklist"
 
 # ── Entry Types ───────────────────────────────────────────────────────────────
 
@@ -33,6 +34,7 @@ DEFAULT_EXPIRE_AFTER = 0  # 0 = disabled
 DEFAULT_FORCE_UPDATE = False
 DEFAULT_RETAIN = True
 DEFAULT_STALE_TIMEOUT = 3600  # 1 hour in seconds
+DEFAULT_MODEL_BLOCKLIST: list[str] = []
 
 # ── Unit system ──────────────────────────────────────────────────────────────
 UNIT_SYSTEM_SI = "si"
